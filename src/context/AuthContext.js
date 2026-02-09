@@ -1,26 +1,10 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import authService from '../services/authService';
 
-interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-}
+const AuthContext = createContext(undefined);
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (identifier: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  register: (data: any) => Promise<{ success: boolean; message?: string }>;
-  logout: () => Promise<void>;
-  isAuthenticated: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,13 +20,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(storedUser);
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      // Silent error
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (identifier: string, password: string) => {
+  const login = async (identifier, password) => {
     try {
       const response = await authService.login({ identifier, password });
       
@@ -52,12 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       return { success: false, message: response.message || 'Login failed' };
-    } catch (error: any) {
+    } catch (error) {
       return { success: false, message: error.message || 'Login failed' };
     }
   };
 
-  const register = async (registerData: any) => {
+  const register = async (registerData) => {
     try {
       const response = await authService.register(registerData);
       
@@ -67,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       return { success: false, message: response.message || 'Registration failed' };
-    } catch (error: any) {
+    } catch (error) {
       return { success: false, message: error.message || 'Registration failed' };
     }
   };
