@@ -11,7 +11,7 @@ import { Platform } from 'react-native';
 const getApiBaseUrl = () => {
   // For physical device, use your computer's IP address
   // Make sure your phone and computer are on the same WiFi network
-  const PHYSICAL_DEVICE_IP = 'http://192.168.0.105:5000/api';
+  const PHYSICAL_DEVICE_IP = 'http://192.168.0.106:5000/api';
   
   if (__DEV__) {
     // Uncomment the line below if using a physical device
@@ -33,9 +33,6 @@ export const API_BASE_URL = getApiBaseUrl();
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // Increased timeout to 30 seconds
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Request interceptor to add token to headers
@@ -45,6 +42,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Only set Content-Type to application/json if it's not already set
+    // This allows FormData requests to set their own Content-Type
+    if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    
     return config;
   },
   (error) => {

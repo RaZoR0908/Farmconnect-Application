@@ -1,10 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import FarmerHomeScreen from './FarmerHomeScreen';
 
 export default function HomeScreen() {
   const { user } = useAuth();
 
+  // Show role-based home screen
+  if (user?.role === 'FARMER') {
+    return <FarmerHomeScreen />;
+  }
+
+  // Default home for other roles
   return (
     <View style={styles.container}>
       <View style={styles.welcomeContainer}>
