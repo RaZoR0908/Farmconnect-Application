@@ -225,9 +225,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#fafafa',
     overflow: 'hidden',
+    justifyContent: 'center',
+    minHeight: 60,
+    paddingVertical: 5,
   },
   picker: {
-    height: 50,
+    height: 60,
+    paddingVertical: 5,
   },
   button: {
     backgroundColor: '#2e7d32',
