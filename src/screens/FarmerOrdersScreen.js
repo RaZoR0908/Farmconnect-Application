@@ -14,11 +14,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslation, getProductName } from '../utils/translations';
 import api from '../config/api';
 import { getProductEmoji } from '../utils/productImages';
 
 export default function FarmerOrdersScreen() {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  
+  // Translation helper
+  const t = (key) => getTranslation(language, key);
+  
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,8 +63,8 @@ export default function FarmerOrdersScreen() {
 
   const handleAcceptOrder = async (orderId) => {
     Alert.alert(
-      'Accept Order',
-      'Are you sure you want to accept this order?',
+      t('acceptOrder'),
+      t('confirmAccept'),
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -68,7 +75,7 @@ export default function FarmerOrdersScreen() {
               const response = await api.put(`/orders/${orderId}/accept`);
               
               if (response.data.success) {
-                Alert.alert('Success', 'Order accepted successfully');
+                Alert.alert(t('success'), t('orderAccepted'));
                 loadOrders();
               }
             } catch (error) {
@@ -90,7 +97,7 @@ export default function FarmerOrdersScreen() {
 
   const confirmRejectOrder = async () => {
     if (!rejectReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for rejection');
+      Alert.alert(t('error'), t('enterReason'));
       return;
     }
 
@@ -101,7 +108,7 @@ export default function FarmerOrdersScreen() {
       });
 
       if (response.data.success) {
-        Alert.alert('Success', 'Order rejected');
+        Alert.alert(t('success'), t('orderRejected'));
         setShowRejectModal(false);
         loadOrders();
       }
@@ -140,7 +147,7 @@ export default function FarmerOrdersScreen() {
       <View style={styles.orderCard}>
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
-            <Text style={styles.orderNumber}>Order #{item.id.slice(0, 8)}</Text>
+            <Text style={styles.orderNumber}>{t('order')} #{item.id.slice(0, 8)}</Text>
             <Text style={styles.orderDate}>
               {new Date(item.created_at).toLocaleDateString()}
             </Text>
@@ -157,9 +164,9 @@ export default function FarmerOrdersScreen() {
               <Text style={styles.productEmoji}>{productEmoji.emoji}</Text>
             </View>
             <View style={styles.productDetails}>
-              <Text style={styles.productName}>{item.product?.name}</Text>
+              <Text style={styles.productName}>{getProductName(item.product?.name, language)}</Text>
               <Text style={styles.productQuantity}>
-                Quantity: {item.quantity} {item.product?.unit}
+                {t('quantity')}: {item.quantity} {item.product?.unit}
               </Text>
               <Text style={styles.productPrice}>
                 ₹{item.unit_price}/{item.product?.unit}
@@ -176,7 +183,7 @@ export default function FarmerOrdersScreen() {
           </View>
 
           <View style={styles.totalSection}>
-            <Text style={styles.totalLabel}>Total Amount:</Text>
+            <Text style={styles.totalLabel}>{t('totalAmount')}:</Text>
             <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
           </View>
 
@@ -196,7 +203,7 @@ export default function FarmerOrdersScreen() {
               disabled={processing}
             >
               <Ionicons name="close-circle-outline" size={20} color="#f44336" />
-              <Text style={styles.rejectBtnText}>Reject</Text>
+              <Text style={styles.rejectBtnText}>{t('reject')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.acceptBtn]}
@@ -204,7 +211,7 @@ export default function FarmerOrdersScreen() {
               disabled={processing}
             >
               <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-              <Text style={styles.acceptBtnText}>Accept</Text>
+              <Text style={styles.acceptBtnText}>{t('accept')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -235,19 +242,19 @@ export default function FarmerOrdersScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={styles.headerTitle}>{t('myOrders')}</Text>
         <View style={styles.headerStats}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{pendingCount}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
+            <Text style={styles.statLabel}>{t('pending')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{acceptedCount}</Text>
-            <Text style={styles.statLabel}>Accepted</Text>
+            <Text style={styles.statLabel}>{t('accepted')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{orders.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>{t('total')}</Text>
           </View>
         </View>
       </View>
@@ -255,10 +262,10 @@ export default function FarmerOrdersScreen() {
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {renderFilterTab('ALL', 'All Orders')}
-          {renderFilterTab('PENDING', `Pending (${pendingCount})`)}
-          {renderFilterTab('ACCEPTED', 'Accepted')}
-          {renderFilterTab('REJECTED', 'Rejected')}
+          {renderFilterTab('ALL', t('allOrders'))}
+          {renderFilterTab('PENDING', `${t('pending')} (${pendingCount})`)}
+          {renderFilterTab('ACCEPTED', t('accepted'))}
+          {renderFilterTab('REJECTED', t('rejected'))}
         </ScrollView>
       </View>
 
@@ -266,14 +273,14 @@ export default function FarmerOrdersScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2e7d32" />
-          <Text style={styles.loadingText}>Loading orders...</Text>
+          <Text style={styles.loadingText}>{t('loadingOrders')}</Text>
         </View>
       ) : filteredOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No orders found</Text>
+          <Text style={styles.emptyText}>{t('noOrdersFound')}</Text>
           <Text style={styles.emptySubtext}>
-            {filter === 'PENDING' ? 'No pending orders at the moment' : 'Orders will appear here'}
+            {filter === 'PENDING' ? t('noPendingOrders') : t('ordersWillAppear')}
           </Text>
         </View>
       ) : (
@@ -298,22 +305,22 @@ export default function FarmerOrdersScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reject Order</Text>
+              <Text style={styles.modalTitle}>{t('rejectOrder')}</Text>
               <TouchableOpacity onPress={() => setShowRejectModal(false)}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>Reason for rejection:</Text>
+            <Text style={styles.modalLabel}>{t('rejectionReason')}:</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Enter reason (max 70 characters)"
+              placeholder={t('enterRejectReason')}
               value={rejectReason}
               onChangeText={setRejectReason}
               maxLength={70}
             />
             <Text style={styles.characterCount}>
-              {rejectReason.length}/70 characters
+              {rejectReason.length}/70 {t('characters')}
             </Text>
 
             <View style={styles.modalActions}>
@@ -321,7 +328,7 @@ export default function FarmerOrdersScreen() {
                 style={[styles.modalBtn, styles.modalCancelBtn]}
                 onPress={() => setShowRejectModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirmBtn]}
@@ -331,7 +338,7 @@ export default function FarmerOrdersScreen() {
                 {processing ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Reject Order</Text>
+                  <Text style={styles.modalConfirmText}>{t('rejectOrder')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -461,7 +468,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productEmoji: {
-    fontSize: 30,
+    fontSize: 32,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   productDetails: {
     flex: 1,

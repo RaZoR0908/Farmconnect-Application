@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslation, getProductName } from '../utils/translations';
 import { useNavigation } from '@react-navigation/native';
 import productService from '../services/productService';
 import { getProductEmoji } from '../utils/productImages';
@@ -18,6 +20,11 @@ import { getProductEmoji } from '../utils/productImages';
 export default function FarmerProductsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const { language } = useLanguage();
+  
+  // Translation helper
+  const t = (key) => getTranslation(language, key);
+  
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,24 +50,24 @@ export default function FarmerProductsScreen() {
 
   const handleDeleteProduct = async (productId, productName) => {
     Alert.alert(
-      'Delete Product',
-      `Are you sure you want to delete "${productName}"?`,
+      t('deleteProduct'),
+      `${t('deleteConfirm')} "${productName}"?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await productService.deleteProduct(productId);
               if (result.success) {
-                Alert.alert('Success', 'Product deleted successfully');
+                Alert.alert(t('success'), t('productDeleted'));
                 loadProducts();
               } else {
-                Alert.alert('Error', result.message || 'Failed to delete product');
+                Alert.alert(t('error'), result.message || t('failedToDelete'));
               }
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete product');
+              Alert.alert(t('error'), t('failedToDelete'));
             }
           },
         },
@@ -82,7 +89,7 @@ export default function FarmerProductsScreen() {
             <Text style={styles.productEmoji}>{emoji.emoji}</Text>
           </View>
           <View style={styles.productInfo}>
-            <Text style={styles.productName}>{item.name}</Text>
+            <Text style={styles.productName}>{getProductName(item.name, language)}</Text>
             <Text style={styles.productCategory}>{item.category}</Text>
             <View style={styles.productDetails}>
               <Text style={styles.productPrice}>₹{item.price}/{item.unit}</Text>
@@ -104,17 +111,17 @@ export default function FarmerProductsScreen() {
         <View style={styles.productActions}>
           <TouchableOpacity 
             style={[styles.actionBtn, styles.editBtn]}
-            onPress={() => {/* Edit functionality */}}
+            onPress={() => navigation.navigate('Home', { editProduct: item })}
           >
             <Ionicons name="create-outline" size={20} color="#2196F3" />
-            <Text style={styles.editBtnText}>Edit</Text>
+            <Text style={styles.editBtnText}>{t('edit')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.actionBtn, styles.deleteBtn]}
             onPress={() => handleDeleteProduct(item.id, item.name)}
           >
             <Ionicons name="trash-outline" size={20} color="#f44336" />
-            <Text style={styles.deleteBtnText}>Delete</Text>
+            <Text style={styles.deleteBtnText}>{t('delete')}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -125,17 +132,17 @@ export default function FarmerProductsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Products</Text>
+        <Text style={styles.headerTitle}>{t('myProducts')}</Text>
         <View style={styles.headerStats}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{products.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>{t('total')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>
               {products.filter(p => parseFloat(p.quantity) > 0).length}
             </Text>
-            <Text style={styles.statLabel}>In Stock</Text>
+            <Text style={styles.statLabel}>{t('inStock')}</Text>
           </View>
         </View>
       </View>
@@ -144,14 +151,14 @@ export default function FarmerProductsScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2e7d32" />
-          <Text style={styles.loadingText}>Loading products...</Text>
+          <Text style={styles.loadingText}>{t('loadingProducts')}</Text>
         </View>
       ) : products.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="cube-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No products yet</Text>
+          <Text style={styles.emptyText}>{t('noProductsYet')}</Text>
           <Text style={styles.emptySubtext}>
-            Add your first product from the home screen
+            {t('startByAdding')}
           </Text>
         </View>
       ) : (
@@ -165,6 +172,14 @@ export default function FarmerProductsScreen() {
           }
         />
       )}
+      
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('Home', { openAddProduct: true })}
+      >
+        <Ionicons name="add" size={32} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -342,5 +357,21 @@ const styles = StyleSheet.create({
     color: '#ccc',
     marginTop: 5,
     textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#2e7d32',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

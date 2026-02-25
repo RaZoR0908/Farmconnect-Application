@@ -347,6 +347,9 @@ const styles = StyleSheet.create({
   },
   itemImageEmoji: {
     fontSize: 40,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   itemInfo: {
     flex: 1,

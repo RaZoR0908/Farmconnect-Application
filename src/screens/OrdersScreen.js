@@ -458,7 +458,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   productEmoji: {
-    fontSize: 32,
+    fontSize: 34,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   productDetails: {
     flex: 1,

@@ -932,7 +932,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   suggestionEmoji: {
-    fontSize: 24,
+    fontSize: 26,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   suggestionName: {
     flex: 1,
@@ -1013,9 +1016,14 @@ const styles = StyleSheet.create({
     height: 140,
     justifyContent: 'center',
     alignItems: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   productImageEmoji: {
-    fontSize: 50,
+    fontSize: 54,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   discountBadge: {
     position: 'absolute',
@@ -1158,7 +1166,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   modalProductEmoji: {
-    fontSize: 32,
+    fontSize: 34,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   modalProductDetails: {
     flex: 1,

@@ -1,20 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { useNavigation } from '@react-navigation/native';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const navigation = useNavigation();
+  const { language, changeLanguage } = useLanguage();
+
+  const t = (key) => getTranslation(language, key);
+
+  const handleLanguageChange = async (newLanguage) => {
+    await changeLanguage(newLanguage);
+  };
 
   const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      t('logout'),
+      t('logoutConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Logout',
+          text: t('logout'),
           style: 'destructive',
           onPress: async () => {
             await logout();
@@ -27,31 +38,52 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.profileContainer}>
-        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>{user?.role === 'FARMER' ? t('profile') : 'Profile'}</Text>
         
         <View style={styles.infoRow}>
-          <Text style={styles.label}>Name:</Text>
+          <Text style={styles.label}>{user?.role === 'FARMER' ? t('name') : 'Name'}:</Text>
           <Text style={styles.value}>{user?.full_name}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Text style={styles.label}>Email:</Text>
+          <Text style={styles.label}>{user?.role === 'FARMER' ? t('email') : 'Email'}:</Text>
           <Text style={styles.value}>{user?.email}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Text style={styles.label}>Role:</Text>
+          <Text style={styles.label}>{user?.role === 'FARMER' ? t('role') : 'Role'}:</Text>
           <Text style={styles.value}>{user?.role}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Text style={styles.label}>User ID:</Text>
+          <Text style={styles.label}>{user?.role === 'FARMER' ? t('userId') : 'User ID'}:</Text>
           <Text style={styles.value}>{user?.id}</Text>
         </View>
+
+        {/* Language Selector - Only for Farmers */}
+        {user?.role === 'FARMER' && (
+          <View style={styles.languageContainer}>
+            <View style={styles.languageHeader}>
+              <Ionicons name="language-outline" size={20} color="#2e7d32" />
+              <Text style={styles.languageLabel}>{t('language')}</Text>
+            </View>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={language}
+                onValueChange={handleLanguageChange}
+                style={styles.picker}
+              >
+                <Picker.Item label="English" value="English" />
+                <Picker.Item label="मराठी (Marathi)" value="Marathi" />
+                <Picker.Item label="हिन्दी (Hindi)" value="Hindi" />
+              </Picker>
+            </View>
+          </View>
+        )}
       </View>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
+        <Text style={styles.logoutButtonText}>{user?.role === 'FARMER' ? t('logout') : 'Logout'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -97,6 +129,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     flex: 1,
+  },
+  languageContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    width: '100%',
+  },
+  languageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  languageLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2e7d32',
+  },
+  pickerContainer: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  picker: {
+    height: 60,
+    width: '100%',
   },
   logoutButton: {
     backgroundColor: '#d32f2f',

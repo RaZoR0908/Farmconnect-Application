@@ -18,7 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslation, getProductName, getEnglishProductName } from '../utils/translations';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import productService from '../services/productService';
 import { uploadMultipleToCloudinary } from '../services/cloudinaryService';
 import { getProductDisplayImage, getDefaultProductImage, getProductDetailImages } from '../utils/productImages';
@@ -86,6 +88,12 @@ const PRODUCT_SUGGESTIONS = {
 export default function FarmerHomeScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const route = useRoute();
+  const { language } = useLanguage();
+  
+  // Translation helper
+  const t = (key) => getTranslation(language, key);
+  
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [viewingProduct, setViewingProduct] = useState(null);
@@ -98,9 +106,10 @@ export default function FarmerHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [displayName, setDisplayName] = useState(''); // What user sees in input field
   
   const [formData, setFormData] = useState({
-    name: '',
+    name: '', // English name for database
     category: 'VEGETABLES',
     price: '',
     quantity: '',
@@ -116,6 +125,29 @@ export default function FarmerHomeScreen() {
     loadOrders();
     loadWallet();
   }, []);
+
+  // Handle navigation parameters for add/edit product
+  useEffect(() => {
+    if (route.params?.openAddProduct) {
+      setShowAddProduct(true);
+      // Clear the parameter after handling
+      navigation.setParams({ openAddProduct: undefined });
+    }
+    
+    if (route.params?.editProduct) {
+      const product = route.params.editProduct;
+      handleEditProduct(product);
+      // Clear the parameter after handling
+      navigation.setParams({ editProduct: undefined });
+    }
+  }, [route.params]);
+
+  // Update displayName when language changes (for edit mode)
+  useEffect(() => {
+    if (formData.name) {
+      setDisplayName(getProductName(formData.name, language));
+    }
+  }, [language, formData.name]);
 
   // Refresh wallet when screen comes into focus (after accepting/rejecting orders)
   useFocusEffect(
@@ -165,30 +197,35 @@ export default function FarmerHomeScreen() {
   };
 
   const handleNameChange = (text) => {
-    setFormData({ ...formData, name: text });
+    setDisplayName(text); // Update what user sees
     
     if (text.length > 0) {
-      // Search across all categories
+      // Search across all categories (in selected language)
       let allSuggestions = [];
       let detectedCategory = formData.category;
       
       Object.keys(PRODUCT_SUGGESTIONS).forEach(category => {
-        const matches = PRODUCT_SUGGESTIONS[category].filter(item => 
-          item.toLowerCase().startsWith(text.toLowerCase())
-        );
+        const matches = PRODUCT_SUGGESTIONS[category].filter(englishName => {
+          const translatedName = getProductName(englishName, language);
+          return translatedName.toLowerCase().startsWith(text.toLowerCase());
+        });
         
         if (matches.length > 0) {
           // Auto-detect category from first match
           if (allSuggestions.length === 0) {
             detectedCategory = category;
           }
-          allSuggestions = [...allSuggestions, ...matches.map(item => ({ name: item, category }))];
+          allSuggestions = [...allSuggestions, ...matches.map(englishName => ({ 
+            englishName, 
+            displayName: getProductName(englishName, language),
+            category 
+          }))];
         }
       });
       
       // Auto-set category if detected
       if (detectedCategory !== formData.category && allSuggestions.length > 0) {
-        setFormData({ ...formData, name: text, category: detectedCategory });
+        setFormData({ ...formData, category: detectedCategory });
       }
       
       setFilteredSuggestions(allSuggestions);
@@ -200,7 +237,13 @@ export default function FarmerHomeScreen() {
   };
 
   const selectSuggestion = (suggestion) => {
-    setFormData({ ...formData, name: suggestion.name, category: suggestion.category });
+    // Save English name to database but show translated name in input
+    setDisplayName(suggestion.displayName); // Show translated name
+    setFormData({ 
+      ...formData, 
+      name: suggestion.englishName, // Save English name for database
+      category: suggestion.category 
+    });
     setShowSuggestions(false);
     setFilteredSuggestions([]);
   };
@@ -305,6 +348,7 @@ export default function FarmerHomeScreen() {
           unit: 'KG',
           description: '',
         });
+        setDisplayName('');
         setSelectedImages([]);
         setUploadProgress({ current: 0, total: 0 });
         loadProducts();
@@ -351,6 +395,8 @@ export default function FarmerHomeScreen() {
       unit: product.unit,
       description: product.description || '',
     });
+    // Set display name to translated version
+    setDisplayName(getProductName(product.name, language));
     // Show existing images as preview (URLs from database)
     setSelectedImages(product.image_urls || []);
     setShowAddProduct(true);
@@ -358,17 +404,17 @@ export default function FarmerHomeScreen() {
 
   const handleUpdateProduct = async () => {
     if (!formData.name.trim() || !formData.price || !formData.quantity) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert(t('error'), t('fillAllFields'));
       return;
     }
 
     if (isNaN(formData.price) || parseFloat(formData.price) <= 0) {
-      Alert.alert('Error', 'Please enter a valid price');
+      Alert.alert(t('error'), t('validPrice'));
       return;
     }
 
     if (isNaN(formData.quantity) || parseFloat(formData.quantity) <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+      Alert.alert(t('error'), t('validQuantity'));
       return;
     }
 
@@ -423,6 +469,7 @@ export default function FarmerHomeScreen() {
           unit: 'KG',
           description: '',
         });
+        setDisplayName('');
         setSelectedImages([]);
         setUploadProgress({ current: 0, total: 0 });
         loadProducts();
@@ -447,6 +494,7 @@ export default function FarmerHomeScreen() {
       unit: 'KG',
       description: '',
     });
+    setDisplayName('');
     setSelectedImages([]);
     setUploadProgress({ current: 0, total: 0 });
   };
@@ -468,10 +516,11 @@ export default function FarmerHomeScreen() {
     return (
       <ScrollView 
         style={styles.content}
+        contentContainerStyle={{ paddingBottom: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.greeting}>Welcome, {user?.full_name}!</Text>
-        <Text style={styles.subtitle}>Farmer Dashboard</Text>
+        <Text style={styles.greeting}>{t('welcomeText')}, {user?.full_name}!</Text>
+        <Text style={styles.subtitle}>{t('farmerDashboard')}</Text>
 
         {/* Wallet Balance Card */}
         <TouchableOpacity 
@@ -479,13 +528,13 @@ export default function FarmerHomeScreen() {
           onPress={() => navigation.navigate('Wallet')}
         >
           <View style={styles.walletLeft}>
-            <Ionicons name="wallet" size={28} color="#fff" />
+            <Ionicons name="wallet" size={26} color="#fff" />
             <View style={{marginLeft: 12}}>
-              <Text style={styles.walletLabel}>Wallet Balance</Text>
+              <Text style={styles.walletLabel}>{t('walletBalance')}</Text>
               <Text style={styles.walletAmount}>₹{wallet ? parseFloat(wallet.balance).toFixed(2) : '0.00'}</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#fff" />
+          <Ionicons name="chevron-forward" size={22} color="#fff" />
         </TouchableOpacity>
 
         <View style={styles.statsGrid}>
@@ -493,81 +542,65 @@ export default function FarmerHomeScreen() {
             style={[styles.statCard, { backgroundColor: '#4CAF50' }]}
             onPress={() => navigation.navigate('Products')}
           >
-            <Ionicons name="cube-outline" size={32} color="#fff" />
+            <Ionicons name="cube-outline" size={28} color="#fff" />
             <Text style={styles.statValue}>{products.length}</Text>
-            <Text style={styles.statLabel}>Products</Text>
-            <Text style={styles.statSubtext}>{inStockProducts} in stock</Text>
+            <Text style={styles.statLabel}>{t('products')}</Text>
+            <Text style={styles.statSubtext}>{inStockProducts} {t('inStock')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={[styles.statCard, { backgroundColor: '#2196F3' }]}
             onPress={() => navigation.navigate('Orders')}
           >
-            <Ionicons name="cart-outline" size={32} color="#fff" />
+            <Ionicons name="cart-outline" size={28} color="#fff" />
             <Text style={styles.statValue}>{orders.length}</Text>
-            <Text style={styles.statLabel}>Orders</Text>
-            <Text style={styles.statSubtext}>Total received</Text>
+            <Text style={styles.statLabel}>{t('orders')}</Text>
+            <Text style={styles.statSubtext}>{t('totalReceived')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
-            <Ionicons name="time-outline" size={32} color="#fff" />
+            <Ionicons name="time-outline" size={28} color="#fff" />
             <Text style={styles.statValue}>{pendingOrders}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-            <Text style={styles.statSubtext}>Needs action</Text>
+            <Text style={styles.statLabel}>{t('pending')}</Text>
+            <Text style={styles.statSubtext}>{t('needsAction')}</Text>
           </View>
 
           <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
-            <Ionicons name="trending-up-outline" size={32} color="#fff" />
+            <Ionicons name="trending-up-outline" size={28} color="#fff" />
             <Text style={styles.statValue}>₹{totalRevenue.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Revenue</Text>
-            <Text style={styles.statSubtext}>From sales</Text>
+            <Text style={styles.statLabel}>{t('revenue')}</Text>
+            <Text style={styles.statSubtext}>{t('fromSales')}</Text>
           </View>
         </View>
 
         {/* Low Stock Alert */}
         {lowStockProducts > 0 && (
           <View style={styles.alertCard}>
-            <Ionicons name="warning-outline" size={24} color="#ff9800" />
+            <Ionicons name="warning-outline" size={22} color="#ff9800" />
             <View style={{flex: 1, marginLeft: 12}}>
-              <Text style={styles.alertTitle}>Low Stock Alert</Text>
-              <Text style={styles.alertText}>{lowStockProducts} product(s) running low on stock</Text>
+              <Text style={styles.alertTitle}>{t('lowStockAlert')}</Text>
+              <Text style={styles.alertText}>{lowStockProducts} {t('lowStockMessage')}</Text>
             </View>
           </View>
         )}
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Quick Actions</Text>
+        <Text style={styles.infoTitle}>{t('quickActions')}</Text>
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => setShowAddProduct(true)}
         >
-          <Ionicons name="add-circle-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>Add New Product</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
+          <Ionicons name="add-circle-outline" size={22} color="#2e7d32" />
+          <Text style={styles.actionText}>{t('addNewProduct')}</Text>
+          <Ionicons name="chevron-forward" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => navigation.navigate('Orders')}
         >
-          <Ionicons name="receipt-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>Manage Orders</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Products')}
-        >
-          <Ionicons name="cube-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>View All Products</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Wallet')}
-        >
-          <Ionicons name="wallet-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>Wallet & Transactions</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
+          <Ionicons name="receipt-outline" size={22} color="#2e7d32" />
+          <Text style={styles.actionText}>{t('manageOrders')}</Text>
+          <Ionicons name="chevron-forward" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -628,7 +661,7 @@ export default function FarmerHomeScreen() {
                 <View style={styles.productInfo}>
                   <View style={styles.productHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.productName}>{product.name}</Text>
+                      <Text style={styles.productName}>{getProductName(product.name, language)}</Text>
                       <Text style={styles.productCategory}>{product.category}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -785,18 +818,18 @@ export default function FarmerHomeScreen() {
               <Ionicons name="close" size={28} color="#333" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
-              {editingProduct ? 'Edit Product' : 'Add New Product'}
+              {editingProduct ? t('editProduct') : t('addNewProduct')}
             </Text>
             <View style={{ width: 28 }} />
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Product Name *</Text>
+              <Text style={styles.label}>{t('productName')} *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Start typing product name..."
-                value={formData.name}
+                placeholder={t('startTyping')}
+                value={displayName}
                 onChangeText={handleNameChange}
                 autoCapitalize="words"
               />
@@ -810,7 +843,7 @@ export default function FarmerHomeScreen() {
                         onPress={() => selectSuggestion(item)}
                       >
                         <Ionicons name="leaf-outline" size={16} color="#2e7d32" />
-                        <Text style={styles.suggestionText}>{item.name}</Text>
+                        <Text style={styles.suggestionText}>{item.displayName}</Text>
                         <Text style={styles.suggestionCategory}>{item.category}</Text>
                       </TouchableOpacity>
                     ))}
@@ -1041,7 +1074,7 @@ export default function FarmerHomeScreen() {
 
                 {/* Product Info */}
                 <View style={styles.detailsContainer}>
-                  <Text style={styles.detailsProductName}>{viewingProduct.name}</Text>
+                  <Text style={styles.detailsProductName}>{getProductName(viewingProduct.name, language)}</Text>
                   <Text style={styles.detailsCategory}>{viewingProduct.category}</Text>
 
                   <View style={styles.detailsRow}>
@@ -1113,56 +1146,56 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
   greeting: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -8,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   statCard: {
     width: '50%',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 16,
+    padding: 16,
+    borderRadius: 10,
+    marginBottom: 10,
     paddingHorizontal: 8,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginTop: 8,
+    marginTop: 6,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#fff',
     opacity: 0.9,
-    marginTop: 4,
+    marginTop: 3,
   },
   statSubtext: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#fff',
     opacity: 0.7,
-    marginTop: 2,
+    marginTop: 1,
   },
   walletCard: {
     backgroundColor: '#2e7d32',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1177,41 +1210,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   walletLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#fff',
     opacity: 0.9,
   },
   walletAmount: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginTop: 4,
+    marginTop: 3,
   },
   alertCard: {
     backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     borderLeftWidth: 4,
     borderLeftColor: '#ff9800',
   },
   alertTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#664d03',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   alertText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#664d03',
   },
   infoCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1219,20 +1252,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   infoTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
   actionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#333',
     marginLeft: 12,
     flex: 1,
@@ -1260,9 +1293,9 @@ const styles = StyleSheet.create({
   },
   productCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1276,26 +1309,26 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   productCategory: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
   },
   productDetails: {
     marginTop: 6,
   },
   productPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2e7d32',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   productStock: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
   },
   productDescription: {
@@ -1459,7 +1492,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f5e9',
   },
   productEmoji: {
-    fontSize: 35,
+    fontSize: 38,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   productInfo: {
     flex: 1,
@@ -1503,7 +1539,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productEmoji: {
-    fontSize: 35,
+    fontSize: 38,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   productInfo: {
     flex: 1,

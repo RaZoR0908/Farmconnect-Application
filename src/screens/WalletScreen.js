@@ -14,10 +14,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import walletService from '../services/walletService';
 
 export default function WalletScreen() {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  
+  // Translation helper
+  const t = (key) => getTranslation(language, key);
+  
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +69,7 @@ export default function WalletScreen() {
 
   const handleAddMoney = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert(t('error'), t('validAmount'));
       return;
     }
 
@@ -71,13 +78,13 @@ export default function WalletScreen() {
       const result = await walletService.addMoney(parseFloat(amount));
       
       if (result.success) {
-        Alert.alert('Success', `₹${amount} added to your wallet successfully!`);
+        Alert.alert(t('success'), `₹${amount} ${t('moneyAdded')}`);
         setShowAddMoney(false);
         setAmount('');
         loadWalletData();
       }
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to add money');
+      Alert.alert(t('error'), error.response?.data?.message || t('failedToAddMoney'));
     } finally {
       setProcessing(false);
     }
@@ -118,11 +125,11 @@ export default function WalletScreen() {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
     if (days === 0) {
-      return 'Today';
+      return t('today');
     } else if (days === 1) {
-      return 'Yesterday';
+      return t('yesterday');
     } else if (days < 7) {
-      return `${days} days ago`;
+      return `${days} ${t('daysAgo')}`;
     }
     
     return date.toLocaleDateString('en-IN', { 
@@ -149,7 +156,7 @@ export default function WalletScreen() {
             <Text style={styles.transactionDesc}>{item.description}</Text>
             {userName && (
               <Text style={styles.transactionUser}>
-                {item.type === 'CREDIT' ? 'From: ' : 'To: '}
+                {item.type === 'CREDIT' ? t('from') : t('to')}
                 {userName} {userRole && `(${userRole.toLowerCase()})`}
               </Text>
             )}
@@ -185,7 +192,7 @@ export default function WalletScreen() {
         <View style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
             <Ionicons name="wallet" size={32} color="#fff" />
-            <Text style={styles.balanceLabel}>Wallet Balance</Text>
+            <Text style={styles.balanceLabel}>{t('walletBalance')}</Text>
           </View>
           <Text style={styles.balanceAmount}>
             ₹{wallet ? parseFloat(wallet.balance).toFixed(2) : '0.00'}
@@ -198,7 +205,7 @@ export default function WalletScreen() {
               activeOpacity={0.8}
             >
               <Ionicons name="add-circle" size={20} color="#2e7d32" />
-              <Text style={styles.addMoneyText}>Add Money</Text>
+              <Text style={styles.addMoneyText}>{t('addMoney')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -232,7 +239,7 @@ export default function WalletScreen() {
                 <Ionicons name="arrow-down" size={20} color="#4caf50" />
               </View>
               <View>
-                <Text style={styles.summaryLabel}>Total Received</Text>
+                <Text style={styles.summaryLabel}>{t('totalReceived')}</Text>
                 <Text style={[styles.summaryAmount, { color: '#4caf50' }]}>
                   ₹{getTransactionSummary().totalCredit.toFixed(2)}
                 </Text>
@@ -243,7 +250,7 @@ export default function WalletScreen() {
                 <Ionicons name="arrow-up" size={20} color="#f44336" />
               </View>
               <View>
-                <Text style={styles.summaryLabel}>Total Spent</Text>
+                <Text style={styles.summaryLabel}>{t('totalSpent')}</Text>
                 <Text style={[styles.summaryAmount, { color: '#f44336' }]}>
                   ₹{getTransactionSummary().totalDebit.toFixed(2)}
                 </Text>
@@ -257,7 +264,7 @@ export default function WalletScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="receipt" size={20} color="#2e7d32" style={{ marginRight: 8 }} />
-              <Text style={styles.sectionTitle}>Transaction History</Text>
+              <Text style={styles.sectionTitle}>{t('transactionHistory')}</Text>
             </View>
             {transactions.length > 0 && (
               <View style={styles.transactionBadge}>
@@ -269,7 +276,7 @@ export default function WalletScreen() {
           {transactions.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="receipt-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={styles.emptyText}>{t('noTransactions')}</Text>
               <Text style={styles.emptySubtext}>
                 {filter !== 'ALL' 
                   ? `No ${filter.toLowerCase()} transactions found`
@@ -297,13 +304,13 @@ export default function WalletScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Money to Wallet</Text>
+              <Text style={styles.modalTitle}>{t('addMoneyToWallet')}</Text>
               <TouchableOpacity onPress={() => setShowAddMoney(false)}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Enter Amount</Text>
+            <Text style={styles.inputLabel}>{t('enterAmount')}</Text>
             <TextInput
               style={styles.input}
               placeholder="₹ 0.00"
@@ -313,7 +320,7 @@ export default function WalletScreen() {
             />
 
             {/* Quick Amount Buttons */}
-            <Text style={styles.quickAmountLabel}>Quick Add</Text>
+            <Text style={styles.quickAmountLabel}>{t('quickAdd')}</Text>
             <View style={styles.quickAmountContainer}>
               {quickAmounts.map((quickAmount) => (
                 <TouchableOpacity
@@ -338,7 +345,7 @@ export default function WalletScreen() {
               {processing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.confirmButtonText}>Add Money</Text>
+                <Text style={styles.confirmButtonText}>{t('addMoney')}</Text>
               )}
             </TouchableOpacity>
           </View>

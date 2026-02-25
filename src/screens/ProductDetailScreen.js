@@ -272,6 +272,9 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderEmoji: {
     fontSize: 100,
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 6,
   },
   imageIndicators: {
     position: 'absolute',
