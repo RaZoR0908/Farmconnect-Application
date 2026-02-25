@@ -41,7 +41,6 @@ export const uploadToCloudinary = async (imageUri) => {
       throw new Error(response.data.message || 'Upload failed');
     }
   } catch (error) {
-    console.error('Image upload error:', error);
     throw new Error(
       error.response?.data?.message || 
       error.message || 
@@ -103,7 +102,6 @@ export const uploadMultipleToCloudinary = async (imageUris, onProgress = null) =
       throw new Error(response.data.message || 'Upload failed');
     }
   } catch (error) {
-    console.error('Multiple images upload error:', error);
     throw new Error(
       error.response?.data?.message || 
       error.message || 

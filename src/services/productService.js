@@ -1,6 +1,40 @@
 import api from '../config/api';
 
 const productService = {
+  // Get all products (for customers/browsing)
+  getAllProducts: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.category) params.append('category', filters.category);
+      if (filters.min_price) params.append('min_price', filters.min_price);
+      if (filters.max_price) params.append('max_price', filters.max_price);
+      
+      const queryString = params.toString();
+      const url = queryString ? `/products?${queryString}` : '/products';
+      
+      const response = await api.get(url);
+      return response.data.data || [];
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get single product by ID
+  getProductById: async (productId) => {
+    try {
+      const response = await api.get(`/products/${productId}`);
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch product',
+      };
+    }
+  },
+
   // Get all farmer's products
   getMyProducts: async () => {
     try {

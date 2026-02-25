@@ -2,13 +2,19 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import FarmerHomeScreen from './FarmerHomeScreen';
+import CustomerHomeScreen from './CustomerHomeScreen';
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const { user } = useAuth();
 
   // Show role-based home screen
   if (user?.role === 'FARMER') {
-    return <FarmerHomeScreen />;
+    return <FarmerHomeScreen navigation={navigation} />;
+  }
+
+  // Show customer home screen for all other users (CUSTOMER, WHOLESALER, RETAILER, INSTITUTIONAL_BUYER)
+  if (user?.role) {
+    return <CustomerHomeScreen navigation={navigation} />;
   }
 
   // Default home for other roles

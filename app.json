@@ -26,6 +26,9 @@
     },
     "web": {
       "favicon": "./src/assets/images/favicon.png"
-    }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }

@@ -38,18 +38,28 @@ const api = axios.create({
 // Request interceptor to add token to headers
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      
+      // Ensure headers object exists
+      if (!config.headers) {
+        config.headers = {};
+      }
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      
+      // Only set Content-Type to application/json if it's not already set
+      // This allows FormData requests to set their own Content-Type
+      if (!config.headers['Content-Type']) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+      
+      return config;
+    } catch (error) {
+      return config;
     }
-    
-    // Only set Content-Type to application/json if it's not already set
-    // This allows FormData requests to set their own Content-Type
-    if (!config.headers['Content-Type']) {
-      config.headers['Content-Type'] = 'application/json';
-    }
-    
-    return config;
   },
   (error) => {
     return Promise.reject(error);

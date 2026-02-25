@@ -18,9 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import productService from '../services/productService';
 import { uploadMultipleToCloudinary } from '../services/cloudinaryService';
 import { getProductDisplayImage, getDefaultProductImage, getProductDetailImages } from '../utils/productImages';
+import api from '../config/api';
+import walletService from '../services/walletService';
 
 // Common product names suggestions
 const PRODUCT_SUGGESTIONS = {
@@ -82,12 +85,15 @@ const PRODUCT_SUGGESTIONS = {
 
 export default function FarmerHomeScreen() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const navigation = useNavigation();
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [viewingProduct, setViewingProduct] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -107,7 +113,16 @@ export default function FarmerHomeScreen() {
 
   useEffect(() => {
     loadProducts();
+    loadOrders();
+    loadWallet();
   }, []);
+
+  // Refresh wallet when screen comes into focus (after accepting/rejecting orders)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadWallet();
+    }, [])
+  );
 
   const loadProducts = async () => {
     setLoading(true);
@@ -118,9 +133,34 @@ export default function FarmerHomeScreen() {
     setLoading(false);
   };
 
+  const loadOrders = async () => {
+    try {
+      setOrdersLoading(true);
+      const response = await api.get('/orders/farmer');
+      if (response.data.success) {
+        setOrders(response.data.data);
+      }
+    } catch (error) {
+      // Silent error
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const loadWallet = async () => {
+    try {
+      const result = await walletService.getBalance();
+      if (result.success) {
+        setWallet(result.data);
+      }
+    } catch (error) {
+      // Silent error
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadProducts();
+    await Promise.all([loadProducts(), loadOrders(), loadWallet()]);
     setRefreshing(false);
   };
 
@@ -167,11 +207,8 @@ export default function FarmerHomeScreen() {
 
   const pickImages = async () => {
     try {
-      console.log('🖼️ Starting image picker...');
-      
       // Request permissions
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('📱 Permission result:', permissionResult);
       
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Please allow access to your photos to upload product images.');
@@ -184,8 +221,6 @@ export default function FarmerHomeScreen() {
         return;
       }
 
-      console.log('📸 Launching image library...');
-      
       // Launch image picker with crop functionality
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
@@ -194,19 +229,12 @@ export default function FarmerHomeScreen() {
         quality: 0.8,
       });
 
-      console.log('✅ Image picker result:', JSON.stringify(result, null, 2));
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const newImageUri = result.assets[0].uri;
-        console.log('📷 Selected image URI:', newImageUri);
         setSelectedImages([...selectedImages, newImageUri]);
         Alert.alert('Success', 'Image added! Tap again to add more (max 5)');
-      } else {
-        console.log('❌ Image selection was canceled or no assets');
       }
     } catch (error) {
-      console.error('❌ Image picker error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Error', `Failed to pick image: ${error.message || JSON.stringify(error)}`);
     }
   };
@@ -217,8 +245,6 @@ export default function FarmerHomeScreen() {
   };
 
   const handleAddProduct = async () => {
-    console.log('🚀 Starting product creation...');
-    
     if (!formData.name.trim() || !formData.price || !formData.quantity) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -241,27 +267,21 @@ export default function FarmerHomeScreen() {
 
       // Upload images to Cloudinary if any are selected
       if (selectedImages.length > 0) {
-        console.log(`📤 Uploading ${selectedImages.length} images...`);
         setUploadingImages(true);
         try {
           imageUrls = await uploadMultipleToCloudinary(
             selectedImages,
             (current, total) => {
-              console.log(`Upload progress: ${current}/${total}`);
               setUploadProgress({ current: current + 1, total });
             }
           );
-          console.log('✅ Images uploaded:', imageUrls);
         } catch (uploadError) {
-          console.error('❌ Image upload error:', uploadError);
           setLoading(false);
           setUploadingImages(false);
           Alert.alert('Upload Error', `Failed to upload images: ${uploadError.message}`);
           return;
         }
         setUploadingImages(false);
-      } else {
-        console.log('ℹ️ No images to upload');
       }
 
       // Create product data with image URLs
@@ -272,11 +292,7 @@ export default function FarmerHomeScreen() {
         image_urls: imageUrls,
       };
 
-      console.log('📦 Creating product with data:', productData);
-
       const result = await productService.createProduct(productData);
-      
-      console.log('📝 Product creation result:', result);
 
       if (result.success) {
         Alert.alert('Success', 'Product added successfully!');
@@ -293,12 +309,9 @@ export default function FarmerHomeScreen() {
         setUploadProgress({ current: 0, total: 0 });
         loadProducts();
       } else {
-        console.error('❌ Product creation failed:', result.message);
         Alert.alert('Error', result.message || 'Failed to create product');
       }
     } catch (error) {
-      console.error('❌ Product creation error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Error', `Failed to add product: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
@@ -344,8 +357,6 @@ export default function FarmerHomeScreen() {
   };
 
   const handleUpdateProduct = async () => {
-    console.log('🔄 Updating product...');
-    
     if (!formData.name.trim() || !formData.price || !formData.quantity) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -371,20 +382,16 @@ export default function FarmerHomeScreen() {
       const existingImages = selectedImages.filter(uri => !uri.startsWith('file://'));
 
       if (newImages.length > 0) {
-        console.log(`📤 Uploading ${newImages.length} new images...`);
         setUploadingImages(true);
         try {
           const newUrls = await uploadMultipleToCloudinary(
             newImages,
             (current, total) => {
-              console.log(`Upload progress: ${current}/${total}`);
               setUploadProgress({ current: current + 1, total });
             }
           );
           imageUrls = [...existingImages, ...newUrls];
-          console.log('✅ New images uploaded:', newUrls);
         } catch (uploadError) {
-          console.error('❌ Image upload error:', uploadError);
           setLoading(false);
           setUploadingImages(false);
           Alert.alert('Upload Error', `Failed to upload images: ${uploadError.message}`);
@@ -393,7 +400,6 @@ export default function FarmerHomeScreen() {
         setUploadingImages(false);
       } else {
         imageUrls = existingImages;
-        console.log('ℹ️ No new images to upload, keeping existing');
       }
 
       const productData = {
@@ -403,11 +409,7 @@ export default function FarmerHomeScreen() {
         image_urls: imageUrls,
       };
 
-      console.log('📦 Updating product with data:', productData);
-
       const result = await productService.updateProduct(editingProduct.id, productData);
-      
-      console.log('📝 Product update result:', result);
 
       if (result.success) {
         Alert.alert('Success', 'Product updated successfully!');
@@ -425,11 +427,9 @@ export default function FarmerHomeScreen() {
         setUploadProgress({ current: 0, total: 0 });
         loadProducts();
       } else {
-        console.error('❌ Product update failed:', result.message);
         Alert.alert('Error', result.message || 'Failed to update product');
       }
     } catch (error) {
-      console.error('❌ Product update error:', error);
       Alert.alert('Error', `Failed to update product: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
@@ -457,39 +457,83 @@ export default function FarmerHomeScreen() {
     setCurrentImageIndex(index);
   };
 
-  const renderDashboard = () => (
-    <ScrollView 
-      style={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <Text style={styles.greeting}>Welcome, {user?.full_name}!</Text>
-      <Text style={styles.subtitle}>Farmer Dashboard</Text>
+  const renderDashboard = () => {
+    const pendingOrders = orders.filter(o => o.status === 'PENDING').length;
+    const totalRevenue = orders
+      .filter(o => o.status === 'ACCEPTED' || o.status === 'DELIVERED')
+      .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+    const inStockProducts = products.filter(p => p.quantity > 0).length;
+    const lowStockProducts = products.filter(p => p.quantity < 10 && p.quantity > 0).length;
 
-      <View style={styles.statsGrid}>
-        <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
-          <Ionicons name="cube-outline" size={32} color="#fff" />
-          <Text style={styles.statValue}>{products.length}</Text>
-          <Text style={styles.statLabel}>Products</Text>
+    return (
+      <ScrollView 
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <Text style={styles.greeting}>Welcome, {user?.full_name}!</Text>
+        <Text style={styles.subtitle}>Farmer Dashboard</Text>
+
+        {/* Wallet Balance Card */}
+        <TouchableOpacity 
+          style={styles.walletCard}
+          onPress={() => navigation.navigate('Wallet')}
+        >
+          <View style={styles.walletLeft}>
+            <Ionicons name="wallet" size={28} color="#fff" />
+            <View style={{marginLeft: 12}}>
+              <Text style={styles.walletLabel}>Wallet Balance</Text>
+              <Text style={styles.walletAmount}>₹{wallet ? parseFloat(wallet.balance).toFixed(2) : '0.00'}</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#fff" />
+        </TouchableOpacity>
+
+        <View style={styles.statsGrid}>
+          <TouchableOpacity 
+            style={[styles.statCard, { backgroundColor: '#4CAF50' }]}
+            onPress={() => navigation.navigate('Products')}
+          >
+            <Ionicons name="cube-outline" size={32} color="#fff" />
+            <Text style={styles.statValue}>{products.length}</Text>
+            <Text style={styles.statLabel}>Products</Text>
+            <Text style={styles.statSubtext}>{inStockProducts} in stock</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.statCard, { backgroundColor: '#2196F3' }]}
+            onPress={() => navigation.navigate('Orders')}
+          >
+            <Ionicons name="cart-outline" size={32} color="#fff" />
+            <Text style={styles.statValue}>{orders.length}</Text>
+            <Text style={styles.statLabel}>Orders</Text>
+            <Text style={styles.statSubtext}>Total received</Text>
+          </TouchableOpacity>
+
+          <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
+            <Ionicons name="time-outline" size={32} color="#fff" />
+            <Text style={styles.statValue}>{pendingOrders}</Text>
+            <Text style={styles.statLabel}>Pending</Text>
+            <Text style={styles.statSubtext}>Needs action</Text>
+          </View>
+
+          <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
+            <Ionicons name="trending-up-outline" size={32} color="#fff" />
+            <Text style={styles.statValue}>₹{totalRevenue.toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Revenue</Text>
+            <Text style={styles.statSubtext}>From sales</Text>
+          </View>
         </View>
 
-        <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
-          <Ionicons name="cart-outline" size={32} color="#fff" />
-          <Text style={styles.statValue}>0</Text>
-          <Text style={styles.statLabel}>Orders</Text>
-        </View>
-
-        <View style={[styles.statCard, { backgroundColor: '#FF9800' }]}>
-          <Ionicons name="time-outline" size={32} color="#fff" />
-          <Text style={styles.statValue}>0</Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-
-        <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
-          <Ionicons name="cash-outline" size={32} color="#fff" />
-          <Text style={styles.statValue}>₹0</Text>
-          <Text style={styles.statLabel}>Revenue</Text>
-        </View>
-      </View>
+        {/* Low Stock Alert */}
+        {lowStockProducts > 0 && (
+          <View style={styles.alertCard}>
+            <Ionicons name="warning-outline" size={24} color="#ff9800" />
+            <View style={{flex: 1, marginLeft: 12}}>
+              <Text style={styles.alertTitle}>Low Stock Alert</Text>
+              <Text style={styles.alertText}>{lowStockProducts} product(s) running low on stock</Text>
+            </View>
+          </View>
+        )}
 
       <View style={styles.infoCard}>
         <Text style={styles.infoTitle}>Quick Actions</Text>
@@ -503,23 +547,32 @@ export default function FarmerHomeScreen() {
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => setActiveTab('products')}
+          onPress={() => navigation.navigate('Orders')}
         >
-          <Ionicons name="list-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>View My Products</Text>
+          <Ionicons name="receipt-outline" size={24} color="#2e7d32" />
+          <Text style={styles.actionText}>Manage Orders</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => setActiveTab('orders')}
+          onPress={() => navigation.navigate('Products')}
         >
-          <Ionicons name="stats-chart-outline" size={24} color="#2e7d32" />
-          <Text style={styles.actionText}>View Orders</Text>
+          <Ionicons name="cube-outline" size={24} color="#2e7d32" />
+          <Text style={styles.actionText}>View All Products</Text>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('Wallet')}
+        >
+          <Ionicons name="wallet-outline" size={24} color="#2e7d32" />
+          <Text style={styles.actionText}>Wallet & Transactions</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
+};
 
   const renderProducts = () => (
     <View style={styles.content}>
@@ -617,68 +670,108 @@ export default function FarmerHomeScreen() {
     </View>
   );
 
-  const renderOrders = () => (
-    <View style={styles.content}>
-      <Text style={styles.headerTitle}>Orders</Text>
-      <View style={styles.emptyState}>
-        <Ionicons name="cart-outline" size={64} color="#ccc" />
-        <Text style={styles.emptyText}>No orders yet</Text>
-        <Text style={styles.emptySubtext}>Orders will appear here</Text>
+  const renderOrders = () => {
+    const pendingOrders = orders.filter(o => o.status === 'PENDING');
+    const recentOrders = orders.slice(0, 5);
+
+    return (
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Orders</Text>
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            onPress={() => navigation.navigate('FarmerOrders')}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+            <Ionicons name="arrow-forward" size={20} color="#2e7d32" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {ordersLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color="#2e7d32" />
+              <Text style={styles.emptySubtext}>Loading orders...</Text>
+            </View>
+          ) : orders.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cart-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>No orders yet</Text>
+              <Text style={styles.emptySubtext}>Orders will appear here when customers place them</Text>
+            </View>
+          ) : (
+            <>
+              {pendingOrders.length > 0 && (
+                <View style={styles.pendingAlert}>
+                  <Ionicons name="alert-circle" size={24} color="#ff9800" />
+                  <Text style={styles.pendingAlertText}>
+                    You have {pendingOrders.length} pending order{pendingOrders.length > 1 ? 's' : ''} waiting for your response!
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.ordersSummary}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{pendingOrders.length}</Text>
+                  <Text style={styles.summaryLabel}>Pending</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>
+                    {orders.filter(o => o.status === 'ACCEPTED').length}
+                  </Text>
+                  <Text style={styles.summaryLabel}>Accepted</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>
+                    {orders.filter(o => o.status === 'REJECTED').length}
+                  </Text>
+                  <Text style={styles.summaryLabel}>Rejected</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.manageOrdersButton}
+                onPress={() => navigation.navigate('FarmerOrders')}
+              >
+                <Ionicons name="receipt" size={24} color="#fff" />
+                <Text style={styles.manageOrdersText}>Manage All Orders</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>Recent Orders</Text>
+              {recentOrders.map(order => (
+                <View key={order.id} style={styles.orderPreviewCard}>
+                  <View style={styles.orderPreviewHeader}>
+                    <Text style={styles.orderPreviewProduct}>{order.product?.name}</Text>
+                    <View style={[styles.orderPreviewStatus, { 
+                      backgroundColor: order.status === 'PENDING' ? '#ff9800' : 
+                                       order.status === 'ACCEPTED' ? '#4caf50' : '#f44336' 
+                    }]}>
+                      <Text style={styles.orderPreviewStatusText}>{order.status}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.orderPreviewBuyer}>{order.buyer?.full_name}</Text>
+                  <View style={styles.orderPreviewFooter}>
+                    <Text style={styles.orderPreviewQuantity}>
+                      {order.quantity} {order.product?.unit}
+                    </Text>
+                    <Text style={styles.orderPreviewAmount}>₹{order.total_amount.toFixed(2)}</Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
+        </ScrollView>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'dashboard' && styles.activeTab]}
-          onPress={() => setActiveTab('dashboard')}
-        >
-          <Ionicons
-            name="speedometer-outline"
-            size={24}
-            color={activeTab === 'dashboard' ? '#2e7d32' : '#666'}
-          />
-          <Text style={[styles.tabText, activeTab === 'dashboard' && styles.activeTabText]}>
-            Dashboard
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'products' && styles.activeTab]}
-          onPress={() => setActiveTab('products')}
-        >
-          <Ionicons
-            name="cube-outline"
-            size={24}
-            color={activeTab === 'products' ? '#2e7d32' : '#666'}
-          />
-          <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
-            Products
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
-          onPress={() => setActiveTab('orders')}
-        >
-          <Ionicons
-            name="cart-outline"
-            size={24}
-            color={activeTab === 'orders' ? '#2e7d32' : '#666'}
-          />
-          <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
-            Orders
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      {activeTab === 'dashboard' && renderDashboard()}
-      {activeTab === 'products' && renderProducts()}
-      {activeTab === 'orders' && renderOrders()}
+      {/* Content - Show Dashboard */}
+      {renderDashboard()}
 
       {/* Add Product Modal */}
       <Modal
@@ -1058,6 +1151,61 @@ const styles = StyleSheet.create({
     color: '#fff',
     opacity: 0.9,
     marginTop: 4,
+  },
+  statSubtext: {
+    fontSize: 11,
+    color: '#fff',
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  walletCard: {
+    backgroundColor: '#2e7d32',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  walletLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletLabel: {
+    fontSize: 14,
+    color: '#fff',
+    opacity: 0.9,
+  },
+  walletAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 4,
+  },
+  alertCard: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#664d03',
+    marginBottom: 4,
+  },
+  alertText: {
+    fontSize: 13,
+    color: '#664d03',
   },
   infoCard: {
     backgroundColor: '#fff',
@@ -1580,4 +1728,133 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },});
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  viewAllText: {
+    color: '#2e7d32',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pendingAlert: {
+    flexDirection: 'row',
+    backgroundColor: '#fff3cd',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    gap: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  pendingAlertText: {
+    flex: 1,
+    color: '#856404',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  ordersSummary: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  manageOrdersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2e7d32',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 10,
+  },
+  manageOrdersText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  orderPreviewCard: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  orderPreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderPreviewProduct: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  orderPreviewStatus: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  orderPreviewStatusText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  orderPreviewBuyer: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  orderPreviewFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  orderPreviewQuantity: {
+    fontSize: 14,
+    color: '#666',
+  },
+  orderPreviewAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+});
